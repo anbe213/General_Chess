@@ -28,18 +28,23 @@ class GameState():
             ['**', '**', '*-', '--', '--', '--', '--', '--', '--', '--', '--'],
             ['**', '**', '*-', '--', '--', '--', '--', '--', '--', '--', '--']
         ]
-        self.moveFunctions = {'B': self.getInfantryMoves, 'C': self.getEngineerMoves, 'D': self.getMilitiaMoves, 'F': self.getAntiAirCraftMoves,
-                              'G': self.getGeneralMoves, 'H': self.getNavyMoves, 'K': self.getAirCraftMoves, 'L': self.getRocketMoves,
+        self.moveFunctions = {'B': self.getInfantryMoves, 'C': self.getEngineerMoves, 'D': self.getMilitiaMoves,
+                              'F': self.getAntiAirCraftMoves,
+                              'G': self.getGeneralMoves, 'H': self.getNavyMoves, 'K': self.getAirCraftMoves,
+                              'L': self.getRocketMoves,
                               'P': self.getCanonMoves, 'S': self.getHQMoves, 'T': self.getTankMoves}
         self.redToMove = True
         self.moveLog = []
 
     def makeMove(self, move):
-        self.board[move.startRow][move.startCol] = self.terran[move.startRow][move.startCol]
-        self.board[move.endRow][move.endCol] = move.pieceMoved
+        if self.board[move.startRow][move.startCol][1] not in ['H', 'K'] and self.terran[move.endRow][move.endCol] == '**':
+            self.board[move.endRow][move.endCol] = '**'  # land unit capture enemy at sea
+        else:
+            self.board[move.startRow][move.startCol] = self.terran[move.startRow][move.startCol]
+            self.board[move.endRow][move.endCol] = move.pieceMoved
         self.moveLog.append(move)
         self.redToMove = not self.redToMove
-        
+
     def undoMove(self):
         if len(self.moveLog) != 0:
             move = self.moveLog.pop()
@@ -60,27 +65,103 @@ class GameState():
                     self.moveFunctions[piece](r, c, moves)
         return moves
 
+    def enemyToCapture(self, r, c):
+        if (self.redToMove and self.board[r][c][0] == 'b') or (not self.redToMove and self.board[r][c][0] == 'r'):
+            return True
+        else:
+            return False
+
+    # (x1, y1): Current location; (x2, y2): Destination
+    def streamAcross(self, x1, y1, x2, y2):
+        if abs(x1 - x2) != 1:  # not moving up or down
+            return False
+
+        if self.terran[x1][y1] == '*-' and self.terran[x2][y2] == '*-':
+            if self.terran[x1][y1 - 1] in ['*-', '#-'] and self.terran[x2][y2 - 1] in ['*-', '#-']:
+                return True
+            elif self.terran[x1][y1 + 1] in ['*-', '#-'] and self.terran[x2][y2 + 1] in ['*-', '#-']:
+                return True
+        return False
+
     def getInfantryMoves(self, r, c, moves):
-        try:
-            if self.board[r-1][c] in ['*-', '--', '#-']:
-                moves.append(Move((r, c), (r-1, c), self.board))
-            if self.board[r+1][c] in ['*-', '--', '#-']:
-                moves.append(Move((r, c), (r+1, c), self.board))
-            if self.board[r][c-1] in ['*-', '--', '#-']:
-                moves.append(Move((r, c), (r, c-1), self.board))
-            if self.board[r][c+1] in ['*-', '--', '#-']:
-                moves.append(Move((r, c), (r, c+1), self.board))
-        except IndexError:
-            return()
+        if r != 0:  # not at top conner
+            if self.board[r - 1][c] in ['*-', '--', '#-'] and not self.streamAcross(r, c, r - 1, c):
+                moves.append(Move((r, c), (r - 1, c), self.board))
+            elif self.enemyToCapture(r - 1, c):
+                moves.append(Move((r, c), (r - 1, c), self.board))
+
+        if r != len(self.board) - 1:  # not at bot conner
+            if self.board[r + 1][c] in ['*-', '--', '#-'] and not self.streamAcross(r, c, r + 1, c):
+                moves.append(Move((r, c), (r + 1, c), self.board))
+            elif self.enemyToCapture(r + 1, c):
+                moves.append(Move((r, c), (r + 1, c), self.board))
+
+        if c != 0:  # not at left conner
+            if self.board[r][c - 1] in ['*-', '--', '#-'] and not self.streamAcross(r, c, r, c - 1):
+                moves.append(Move((r, c), (r, c - 1), self.board))
+            elif self.enemyToCapture(r, c - 1):
+                moves.append(Move((r, c), (r, c - 1), self.board))
+
+        if c != len(self.board[0]) - 1:  # not at right conner
+
+            if self.board[r][c + 1] in ['*-', '--', '#-'] and not self.streamAcross(r, c, r, c + 1):
+                moves.append(Move((r, c), (r, c + 1), self.board))
+            elif self.enemyToCapture(r, c + 1):
+                moves.append(Move((r, c), (r, c + 1), self.board))
 
     def getEngineerMoves(self, r, c, moves):
-        pass
+        if r != 0:  # not at top conner
+            if self.board[r - 1][c] in ['*-', '--', '#-']:
+                moves.append(Move((r, c), (r - 1, c), self.board))
+            elif self.enemyToCapture(r - 1, c):
+                moves.append(Move((r, c), (r - 1, c), self.board))
+
+        if r != len(self.board) - 1:  # not at bot conner
+            if self.board[r + 1][c] in ['*-', '--', '#-']:
+                moves.append(Move((r, c), (r + 1, c), self.board))
+            elif self.enemyToCapture(r + 1, c):
+                moves.append(Move((r, c), (r + 1, c), self.board))
+
+        if c != 0:  # not at left conner
+            if self.board[r][c - 1] in ['*-', '--', '#-']:
+                moves.append(Move((r, c), (r, c - 1), self.board))
+            elif self.enemyToCapture(r, c - 1):
+                moves.append(Move((r, c), (r, c - 1), self.board))
+
+        if c != len(self.board[0]) - 1:  # not at right conner
+            if self.board[r][c + 1] in ['*-', '--', '#-']:
+                moves.append(Move((r, c), (r, c + 1), self.board))
+            elif self.enemyToCapture(r, c + 1):
+                moves.append(Move((r, c), (r, c + 1), self.board))
 
     def getMilitiaMoves(self, r, c, moves):
         pass
 
     def getAntiAirCraftMoves(self, r, c, moves):
-        pass
+        if r != 0:  # not at top conner
+            if self.board[r - 1][c] in ['*-', '--', '#-'] and not self.streamAcross(r, c, r - 1, c):
+                moves.append(Move((r, c), (r - 1, c), self.board))
+            elif self.enemyToCapture(r - 1, c):
+                moves.append(Move((r, c), (r - 1, c), self.board))
+
+        if r != len(self.board) - 1:  # not at bot conner
+            if self.board[r + 1][c] in ['*-', '--', '#-'] and not self.streamAcross(r, c, r + 1, c):
+                moves.append(Move((r, c), (r + 1, c), self.board))
+            elif self.enemyToCapture(r + 1, c):
+                moves.append(Move((r, c), (r + 1, c), self.board))
+
+        if c != 0:  # not at left conner
+            if self.board[r][c - 1] in ['*-', '--', '#-'] and not self.streamAcross(r, c, r, c - 1):
+                moves.append(Move((r, c), (r, c - 1), self.board))
+            elif self.enemyToCapture(r, c - 1):
+                moves.append(Move((r, c), (r, c - 1), self.board))
+
+        if c != len(self.board[0]) - 1:  # not at right conner
+
+            if self.board[r][c + 1] in ['*-', '--', '#-'] and not self.streamAcross(r, c, r, c + 1):
+                moves.append(Move((r, c), (r, c + 1), self.board))
+            elif self.enemyToCapture(r, c + 1):
+                moves.append(Move((r, c), (r, c + 1), self.board))
 
     def getGeneralMoves(self, r, c, moves):
         pass
@@ -111,12 +192,11 @@ class GameState():
 
 
 class Move():
-
-    rankToRows = {"1" : 11, "2" : 10, "3" : 9, "4" : 8, "5" : 7, "6" : 6,
-                  "7" : 5, "8" : 4, "9" : 3, "10" : 2, "11" : 1, "12" : 0}
+    rankToRows = {"1": 11, "2": 10, "3": 9, "4": 8, "5": 7, "6": 6,
+                  "7": 5, "8": 4, "9": 3, "10": 2, "11": 1, "12": 0}
     rowsToRanks = {v: k for k, v in rankToRows.items()}
-    filesToCol = {"a" : 10, "b" : 9, "c" : 8, "d" : 7, "e" : 6,
-                  "f" : 5, "g" : 4, "h" : 3, "i" : 2, "j" : 1, "k" : 0}
+    filesToCol = {"a": 10, "b": 9, "c": 8, "d": 7, "e": 6,
+                  "f": 5, "g": 4, "h": 3, "i": 2, "j": 1, "k": 0}
     colsToFiles = {v: k for k, v in filesToCol.items()}
 
     def __init__(self, startSq, endSq, board):
@@ -127,11 +207,11 @@ class Move():
         self.pieceMoved = board[self.startRow][self.startCol]
         self.pieceCaptured = board[self.endRow][self.endCol]
         self.moveID = self.startRow * 1000000 + self.startCol * 10000 + self.endRow * 100 + self.endCol
-        print(self.moveID)
 
     """
     Overriding the equals method
     """
+
     def __eq__(self, other):
         if isinstance(other, Move):
             return self.moveID == other.moveID
