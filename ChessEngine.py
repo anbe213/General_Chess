@@ -75,7 +75,9 @@ class GameState():
     def streamAcross(self, x1, y1, x2, y2):
         if abs(x1 - x2) != 1:  # not moving up or down
             return False
-
+        # across stream by diagonal line is not allowed
+        if (self.terran[x1][y1] == '#-' and self.terran[x2][y2] == '*-') or (self.terran[x1][y1] == '*-' and self.terran[x2][y2] == '#-'):
+            return True
         if self.terran[x1][y1] == '*-' and self.terran[x2][y2] == '*-':
             if self.terran[x1][y1 - 1] in ['*-', '#-'] and self.terran[x2][y2 - 1] in ['*-', '#-']:
                 return True
@@ -135,7 +137,17 @@ class GameState():
                 moves.append(Move((r, c), (r, c + 1), self.board))
 
     def getMilitiaMoves(self, r, c, moves):
-        pass
+        for i in [r - 1, r, r + 1]:
+            for j in [c - 1, c, c + 1]:  # square around (r, c)
+                if i == r and j == c:  # stay exception
+                    continue
+                print(len(self.board[0]) - 1)
+                if 0 <= (i and j) <= len(self.board[0]) - 1:  # conner exception
+                    if self.board[i][j] in ['*-', '--', '#-'] and not self.streamAcross(r, c, i, j):  # move
+                        moves.append(Move((r, c), (i, j), self.board))
+                    elif self.enemyToCapture(i, j):
+                        moves.append(Move((r, c), (i, j), self.board))  # capture
+
 
     def getAntiAirCraftMoves(self, r, c, moves):
         if r != 0:  # not at top conner
@@ -164,7 +176,36 @@ class GameState():
                 moves.append(Move((r, c), (r, c + 1), self.board))
 
     def getGeneralMoves(self, r, c, moves):
-        pass
+        for i in range(r + 1, len(self.board)):  # downward move
+            if i == r + 1 and self.enemyToCapture(i, c):  # capture in 1 range
+                moves.append(Move((r, c), (i, c), self.board))
+            elif self.board[i][c] in ['*-', '--', '#-'] and not self.streamAcross(i - 1, c, i, c):
+                moves.append(Move((r, c), (i, c), self.board))
+            else:
+                break
+        for i in range(r - 1, -1, -1):  # upward move
+            if i == r - 1 and self.enemyToCapture(i, c):
+                moves.append(Move((r, c), (i, c), self.board))
+            elif self.board[i][c] in ['*-', '--', '#-'] and not self.streamAcross(i + 1, c, i, c):
+                moves.append(Move((r, c), (i, c), self.board))
+            else:
+                break
+        for i in range(c + 1, len(self.board[0])):  # right move
+            if i == c + 1 and self.enemyToCapture(r, i):
+                moves.append(Move((r, c), (r, i), self.board))
+            elif self.board[r][i] in ['*-', '--', '#-']:
+                moves.append(Move((r, c), (r, i), self.board))
+            else:
+                break
+        for i in range(c - 1, -1, -1):  # left move
+            if i == c - 1 and self.enemyToCapture(r, i):
+                moves.append(Move((r, c), (r, i), self.board))
+            elif self.board[r][i] in ['*-', '--', '#-']:
+                moves.append(Move((r, c), (r, i), self.board))
+            else:
+                break
+
+
 
     def getNavyMoves(self, r, c, moves):
         pass
