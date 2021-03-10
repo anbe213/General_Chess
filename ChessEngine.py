@@ -28,6 +28,22 @@ class GameState():
             ['**', '**', '*-', '--', '--', '--', '--', '--', '--', '--', '--'],
             ['**', '**', '*-', '--', '--', '--', '--', '--', '--', '--', '--']
         ]
+        # Ring of fire
+        self.rof = [
+            [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+        ]
+
         self.moveFunctions = {'B': self.getInfantryMoves, 'C': self.getEngineerMoves, 'D': self.getMilitiaMoves,
                               'F': self.getAntiAirCraftMoves,
                               'G': self.getGeneralMoves, 'H': self.getNavyMoves, 'K': self.getAirCraftMoves,
@@ -35,15 +51,82 @@ class GameState():
                               'P': self.getCanonMoves, 'S': self.getHQMoves, 'T': self.getTankMoves}
         self.redToMove = True
         self.moveLog = []
+        self.gameEnd = False
+
+    def generateROF(self):
+        for r in range(len(self.board)):
+            for c in range(len(self.board[r])):
+                self.rof[r][c] = 0
+
+        for r in range(len(self.board)):
+            for c in range(len(self.board[r])):
+                if self.board[r][c][1] in ['F', 'H']:  # ROF for navy and anti air-craft
+                    for i in range(-1, 2):
+                        if -1 < r + i < len(self.board):
+                            if self.board[r][c][0] == 'r':
+                                self.rof[r + i][c] += 1
+                            else:
+                                self.rof[r + i][c] += 2
+                        if i == 0:  # avoid rof value on the piece is duplicated
+                            continue
+                        if -1 < c + i < len(self.board[r]):
+                            if self.board[r][c][0] == 'r':
+                                self.rof[r][c + i] += 1
+                            else:
+                                self.rof[r][c + i] += 2
+                elif self.board[r][c][1] == 'L':  # ROF for rocket
+                    for i in range(-2, 3):
+                        if -1 < r + i < len(self.board):
+                            if self.board[r][c][0] == 'r':
+                                self.rof[r + i][c] += 1
+                            else:
+                                self.rof[r + i][c] += 2
+                        if -1 < c + i < len(self.board[r]):
+                            if self.board[r][c][0] == 'r':
+                                self.rof[r][c + i] += 1
+                            else:
+                                self.rof[r][c + i] += 2
+                        if -1 < r + i < len(self.board) and -1 < c + i < len(self.board[r]) and abs(i) == 1:
+                            if self.board[r][c][0] == 'r':
+                                self.rof[r + i][c + i] += 1
+                            else:
+                                self.rof[r + i][c + i] += 2
+                        if -1 < r + i < len(self.board) and -1 < c - i < len(self.board[r]) and abs(i) == 1:
+                            if self.board[r][c][0] == 'r':
+                                self.rof[r + i][c - i] += 1
+                            else:
+                                self.rof[r + i][c - i] += 2
 
     def makeMove(self, move):
         if self.board[move.startRow][move.startCol][1] not in ['H', 'K'] and self.terran[move.endRow][move.endCol] == '**':
             self.board[move.endRow][move.endCol] = '**'  # land unit capture enemy at sea
         elif self.board[move.startRow][move.startCol][1] == 'H' and self.terran[move.endRow][move.endCol] in ['--', '#-']:
             self.board[move.endRow][move.endCol] = self.terran[move.endRow][move.endCol]  # navy capture enemy at land
+        elif self.board[move.startRow][move.startCol][1] == 'K' and self.enemyToCapture(move.endRow,
+                                                                                        move.endCol):  # air craft capture enemy in the ring of fire
+            if (self.redToMove and self.rof[move.endRow][move.endCol] in [2, 3]) or (
+                    not self.redToMove and self.rof[move.endRow][move.endCol] in [1, 3]):
+                self.board[move.startRow][move.startCol] = self.terran[move.startRow][move.startCol]
+                self.board[move.endRow][move.endCol] = self.terran[move.endRow][move.endCol]
+            elif self.board[move.endRow][move.endCol][1] != 'K':  # air craft capture enemy non-air craft
+                self.board[move.endRow][move.endCol] = self.terran[move.endRow][move.endCol]
+            else:  # air craft capture enemy air craft
+                self.board[move.startRow][move.startCol] = self.terran[move.startRow][move.startCol]
+                self.board[move.endRow][move.endCol] = move.pieceMoved
         else:
             self.board[move.startRow][move.startCol] = self.terran[move.startRow][move.startCol]
             self.board[move.endRow][move.endCol] = move.pieceMoved
+
+        # move is consider as check?
+        # only moved piece can make a check
+        if self.board[move.startRow][move.startCol] == self.terran[move.startRow][move.startCol] and self.board[move.endRow][move.endCol] != self.terran[move.endRow][move.endCol]:
+            moves = []
+            piece = self.board[move.endRow][move.endCol][1]
+            self.moveFunctions[piece](move.endRow, move.endCol, moves)
+            if self.onCheck(moves):
+                print('Check')
+                self.promote(move.endRow, move.endCol)
+
         self.moveLog.append(move)
         self.redToMove = not self.redToMove
 
@@ -54,18 +137,28 @@ class GameState():
             self.board[move.endRow][move.endCol] = move.pieceCaptured
             self.redToMove = not self.redToMove
 
+    def onCheck(self, moves):  # check if piece in (r, c) location is checking enemy general or not
+        for move in moves:
+            if move.pieceCaptured[1] == 'G':
+                return True
+
+    def promote(self, r, c):
+        pass
+
     def getValidMoves(self):
         return self.getAllPossibleMoves()
 
     def getAllPossibleMoves(self):
-        moves = []
+        allMoves = []
         for r in range(len(self.board)):
             for c in range(len(self.board[r])):
                 turn = self.board[r][c][0]
                 if (turn == 'r' and self.redToMove) or (turn == 'b' and not self.redToMove):
+                    moves = []
                     piece = self.board[r][c][1]
                     self.moveFunctions[piece](r, c, moves)
-        return moves
+                    allMoves += moves
+        return allMoves
 
     def enemyToCapture(self, r, c):
         if (self.redToMove and self.board[r][c][0] == 'b') or (not self.redToMove and self.board[r][c][0] == 'r'):
@@ -259,7 +352,8 @@ class GameState():
             if -1 < r + i < len(self.board):
                 if self.enemyToCapture(r + i, c) and abs(i) != 4:  # capture enemy with onboard canon
                     moves.append(Move((r, c), (r + i, c), self.board))
-                elif self.enemyToCapture(r + i, c) and self.board[r + i][c][1] == 'H':  # capture enemy's navy with navy canon
+                elif self.enemyToCapture(r + i, c) and self.board[r + i][c][
+                    1] == 'H':  # capture enemy's navy with navy canon
                     moves.append(Move((r, c), (r + i, c), self.board))
             if -1 < c + i < len(self.board[0]):
                 if self.enemyToCapture(r, c + i) and abs(i) != 4:
@@ -330,12 +424,14 @@ class GameState():
                 continue
             if -1 <= i <= 1:
                 if 0 <= r + i <= len(self.board) - 1 and 0 <= c + i <= len(self.board[0]) - 1:
-                    if self.board[r + i][c + i] in ['*-', '--', '#-'] and not self.streamAcross(r, c, r + i, c + i):  # diagonal move
+                    if self.board[r + i][c + i] in ['*-', '--', '#-'] and not self.streamAcross(r, c, r + i,
+                                                                                                c + i):  # diagonal move
                         moves.append(Move((r, c), (r + i, c + i), self.board))
                     elif self.enemyToCapture(r + i, c + i):  # capture in diagonal line
                         moves.append(Move((r, c), (r + i, c + i), self.board))
                 if 0 <= r + i <= len(self.board) - 1 and 0 <= c - i <= len(self.board[0]) - 1:
-                    if self.board[r + i][c - i] in ['*-', '--', '#-'] and not self.streamAcross(r, c, r + i, c - i):  # diagonal move
+                    if self.board[r + i][c - i] in ['*-', '--', '#-'] and not self.streamAcross(r, c, r + i,
+                                                                                                c - i):  # diagonal move
                         moves.append(Move((r, c), (r + i, c - i), self.board))
                     elif self.enemyToCapture(r + i, c - i):  # capture in diagonal line
                         moves.append(Move((r, c), (r + i, c - i), self.board))
@@ -386,7 +482,6 @@ class GameState():
                 if self.enemyToCapture(r - i, c + i):
                     moves.append(Move((r, c), (r - i, c + i), self.board))
 
-
     def getHQMoves(self, r, c, moves):
         pass
 
@@ -429,6 +524,68 @@ class GameState():
             return True
         else:
             return False
+
+    def victoryCondition(self):
+        blueNavy = blueAirCraft = blueInfantry = blueGeneral = 0
+        redNavy = redAirCraft = redInfantry = redGeneral = 0
+        victory = ['None', 'Continue']
+
+        for r in range(len(self.board)):
+            for c in range(len(self.board[r])):
+                if self.board[r][c] != self.terran[r][c]:
+                    if self.board[r][c][0] == 'b':
+                        if self.board[r][c][1] == 'H':
+                            blueNavy += 1
+                        if self.board[r][c][1] == 'K':
+                            blueAirCraft += 1
+                        if self.board[r][c][1] == 'G':
+                            blueGeneral += 1
+                        else:
+                            blueInfantry += 1
+                    else:
+                        if self.board[r][c][1] == 'H':
+                            redNavy += 1
+                        if self.board[r][c][1] == 'K':
+                            redAirCraft += 1
+                        if self.board[r][c][1] == 'G':
+                            redGeneral += 1
+                        else:
+                            redInfantry += 1
+
+        if (blueGeneral == 0 or redGeneral == 0) and (blueGeneral != 0 or redGeneral != 0):
+            victory[1] = ' has captured enemy general and got total victory'
+            if blueGeneral == 0:
+                victory[0] = 'Red'
+            else:
+                victory[0] = 'Blue'
+            self.gameEnd = True
+        elif (blueNavy == 0 or redNavy == 0) and (blueNavy != 0 or redNavy != 0):
+            victory[1] = ' has won the naval battle'
+            if blueNavy == 0:
+                victory[0] = 'Red'
+            else:
+                victory[0] = 'Blue'
+            self.gameEnd = True
+        elif (blueAirCraft == 0 or redAirCraft == 0) and (blueAirCraft != 0 or redAirCraft != 0):
+            victory[1] = ' has won the dogfight'
+            if blueAirCraft == 0:
+                victory[0] = 'Red'
+            else:
+                victory[0] = 'Blue'
+            self.gameEnd = True
+        elif (blueInfantry == 0 or redInfantry == 0) and (blueInfantry != 0 or redInfantry != 0):
+            victory[1] = ' has won the field battle'
+            if blueInfantry == 0:
+                victory[0] = 'Red'
+            else:
+                victory[0] = 'Blue'
+            self.gameEnd = True
+
+        return victory
+
+    def claimVictory(self):
+        victory = self.victoryCondition()
+        print(victory[0] + victory[1])
 
 
 class Move():

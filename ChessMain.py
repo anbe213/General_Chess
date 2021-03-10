@@ -52,13 +52,21 @@ def main():
                         playerClicks.append(sqSelected)
 
                 if len(playerClicks) == 2:  # after 2nd click
+                    gs.generateROF()  # generate ring of fire before make a move
                     move = ChessEngine.Move(playerClicks[0], playerClicks[1], gs.board)
                     print(move.getChessNotation())
                     if move in validMoves:
                         gs.makeMove(move)
                         moveMade = True
-                    sqSelected = ()
-                    playerClicks = []
+                        sqSelected = ()
+                        playerClicks = []
+                    else:
+                        playerClicks = [sqSelected]
+
+                gs.victoryCondition()
+                if gs.gameEnd:
+                    gs.claimVictory()
+                    running = False
 
             elif e.type == p.KEYDOWN:
                 if e.key == p.K_z:
@@ -66,17 +74,38 @@ def main():
                     moveMade = True
 
         if moveMade:
+            animateMove(gs.moveLog[-1], screen, gs.board, clock)
             validMoves = gs.getValidMoves()
             moveMade = False
 
-        drawGameState(screen, gs)
+        drawGameState(screen, gs, validMoves, sqSelected)
         clock.tick(MAX_FPS)
         p.display.flip()
+        if not running and gs.gameEnd:
+            p.time.delay(5000)
 
 
-def drawGameState(screen, gs):
-    drawBoard(screen)
+def highlightSquares(screen, gs, validMoves, sqSelected):
+    if sqSelected != ():
+        r, c = sqSelected
+        if gs.board[r][c][0] == ('r' if gs.redToMove else 'b'):  # square selected is a piece that can be moved
+            # highlight selected square
+            s = p.Surface((SQ_SIZE, SQ_SIZE))
+            s.set_alpha(100)
+            s.fill(p.Color('blue'))
+            screen.blit(s, (c * SQ_SIZE, r * SQ_SIZE))
+            # highlight the move from that square
+            s = p.Surface((SQ_SIZE // 4, SQ_SIZE // 4))
+            s.fill(p.Color('red'))
+            for move in validMoves:
+                if move.startRow == r and move.startCol == c:
+                    screen.blit(s, (move.endCol * SQ_SIZE + 24, move.endRow * SQ_SIZE + 24))
+
+
+def drawGameState(screen, gs, validMoves, sqSelected):
+    # drawBoard(screen)
     drawMap(screen)
+    highlightSquares(screen, gs, validMoves, sqSelected)
     drawPieces(screen, gs.board)
 
 
@@ -96,6 +125,27 @@ def drawPieces(screen, board):
             piece = board[r][c]
             if piece not in ['--', '*-', '**', '#-']:
                 screen.blit(IMAGES[piece], p.Rect(c * SQ_SIZE, r * SQ_SIZE, SQ_SIZE, SQ_SIZE))
+
+
+def animateMove(move, screen, board, clock):
+    dR = move.endRow - move.startRow
+    dC = move.endCol - move.startCol
+    framesPerSquare = 10  # frames to move one square
+    framesCount = (abs(dR) + abs(dC)) * framesPerSquare
+    for frame in range(framesCount + 1):
+        r, c = (move.startRow + dR * frame / framesCount, move.startCol + dC * frame / framesCount)
+        drawMap(screen)
+        drawPieces(screen, board)
+        # erase the pieced moved from its ending square
+        endSquare = p.Rect(move.endCol * SQ_SIZE, move.endRow * SQ_SIZE, SQ_SIZE, SQ_SIZE)
+        p.draw.rect(screen, p.Color(255, 255, 255, 128), endSquare)
+        # draw captured piece onto rectangle
+        if move.pieceCaptured not in ['--', '*-', '#-', '**']:
+            screen.blit(IMAGES[move.pieceCaptured], endSquare)
+        # draw moving piece
+        screen.blit(IMAGES[move.pieceMoved], p.Rect(c * SQ_SIZE, r * SQ_SIZE, SQ_SIZE, SQ_SIZE))
+        p.display.flip()
+        clock.tick(100)
 
 
 if __name__ == '__main__':
